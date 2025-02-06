@@ -4,15 +4,19 @@ import com.ainigma100.departmentapi.enums.Status;
 import com.ainigma100.departmentapi.filter.RateLimitingFilter;
 import com.ainigma100.departmentapi.service.EmailService;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import static org.mockito.Mockito.doThrow;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -80,5 +84,50 @@ class EmailControllerTest {
                 .andExpect(jsonPath("$.status", is(Status.SUCCESS.getValue())));
 
     }
+
+    /*
+     * LLM-Generated Test Cases Below
+     */
+
+    @Test
+    void givenEmailServiceFails_whenSendEmailWithoutAttachment_thenReturnInternalServerError() throws Exception {
+        // given - service failure
+        doThrow(new RuntimeException("Email service failed")).when(emailService).sendEmailWithoutAttachment();
+
+        // when - action
+        ResultActions response = mockMvc.perform(get("/api/v1/emails"));
+
+        // then - verify error handling
+        response.andDo(print())
+                .andExpect(status().isInternalServerError());
+    }
+    
+    @Test
+    void givenRateLimitExceeded_whenSendEmailWithoutAttachment_thenReturnTooManyRequests() throws Exception {
+        // given - exceed rate limit
+        for (int i = 0; i < 100; i++) {
+            mockMvc.perform(get("/api/v1/emails"));
+        }
+
+        // when - exceeding rate limit
+        ResultActions response = mockMvc.perform(get("/api/v1/emails"));
+
+        // then - verify response
+        response.andDo(print())
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$", is("Rate limit exceeded. Please try again later.")));
+    }
+
+    @Test
+    @DisplayName("Email service failure when sending email with attachment should return Internal Server Error")
+    void givenEmailServiceFails_whenSendEmailWithAttachment_thenReturnInternalServerError() throws Exception {
+        doThrow(new RuntimeException("Email service failed")).when(emailService).sendEmailWithAttachment();
+    
+        ResultActions response = mockMvc.perform(get("/api/v1/emails/with-attachment"));
+    
+        response.andDo(print())
+                .andExpect(status().isInternalServerError());
+    }
+    
 
 }
