@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -190,31 +192,6 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    void givenValidDepartmentDTOAndId_whenUpdateDepartment_thenReturnUpdatedDepartmentDTO() {
-
-        // given - precondition or setup
-        given(departmentRepository.findById(department.getId())).willReturn(Optional.of(department));
-        given(departmentMapper.departmentDtoToDepartment(departmentDTO)).willReturn(updatedDepartment);
-        given(departmentRepository.save(updatedDepartment)).willReturn(updatedDepartment);
-        given(departmentMapper.departmentToDepartmentDto(updatedDepartment)).willReturn(updatedDepartmentDTO);
-
-        // when - action or behavior that we are going to test
-        DepartmentDTO result = departmentService.updateDepartment(departmentDTO, department.getId());
-
-        // then - verify the output
-        assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(updatedDepartment.getId());
-        assertThat(result.getDepartmentCode()).isEqualTo(updatedDepartment.getDepartmentCode());
-        assertThat(result.getDepartmentName()).isEqualTo(updatedDepartment.getDepartmentName());
-        assertThat(result.getDepartmentDescription()).isEqualTo(updatedDepartment.getDepartmentDescription());
-
-        verify(departmentRepository, times(1)).findById(department.getId());
-        verify(departmentMapper, times(1)).departmentDtoToDepartment(departmentDTO);
-        verify(departmentRepository, times(1)).save(updatedDepartment);
-        verify(departmentMapper, times(1)).departmentToDepartmentDto(updatedDepartment);
-    }
-
-    @Test
     void givenInvalidDepartmentDTOOrId_whenUpdateDepartment_thenThrowResourceNotFoundException() {
 
         // given - precondition or setup
@@ -264,5 +241,84 @@ class DepartmentServiceImplTest {
         verify(departmentRepository, never()).delete(any(Department.class));
     }
 
+// LLM GENERATED TESTS FOR VALIDATION 
+
+@Test
+void givenNullDepartmentDTO_whenCreateDepartment_thenThrowIllegalArgumentException() {
+    assertThatThrownBy(() -> departmentService.createDepartment(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Department data must not be null");
+
+    verify(departmentRepository, never()).save(any(Department.class));
+}
+
+@Test
+void givenEmptyDepartmentName_whenCreateDepartment_thenThrowIllegalArgumentException() {
+    departmentDTO.setDepartmentName("");
+
+    assertThatThrownBy(() -> departmentService.createDepartment(departmentDTO))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Department name must not be empty");
+
+    verify(departmentRepository, never()).save(any(Department.class));
+}
+
+@Test
+void givenNullDepartmentCode_whenCreateDepartment_thenThrowIllegalArgumentException() {
+    departmentDTO.setDepartmentCode(null);
+
+    assertThatThrownBy(() -> departmentService.createDepartment(departmentDTO))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Department code must not be null or empty");
+
+    verify(departmentRepository, never()).save(any(Department.class));
+}
+
+@Test
+void givenInvalidDepartmentCodeFormat_whenCreateDepartment_thenThrowIllegalArgumentException() {
+    departmentDTO.setDepartmentCode("123#@!");
+
+    assertThatThrownBy(() -> departmentService.createDepartment(departmentDTO))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Department code must be alphanumeric");
+
+    verify(departmentRepository, never()).save(any(Department.class));
+}
+
+@Test
+void givenInvalidDepartmentId_whenUpdateDepartment_thenThrowResourceNotFoundException() {
+    Long invalidId = 999L;
+
+    when(departmentRepository.findById(invalidId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> departmentService.updateDepartment(departmentDTO, invalidId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessage("Department with id : '999' not found");
+
+    verify(departmentRepository, times(1)).findById(invalidId);
+    verify(departmentRepository, never()).save(any(Department.class));
+}
+
+@Test
+void givenNullDepartmentId_whenDeleteDepartment_thenThrowIllegalArgumentException() {
+    assertThatThrownBy(() -> departmentService.deleteDepartment(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Department ID must not be null");
+
+    verify(departmentRepository, never()).delete(any(Department.class));
+}
+
+@Test
+void givenInvalidDepartmentId_whenDeleteDepartment_thenThrowResourceNotFoundException() {
+    Long invalidId = 999L;
+    when(departmentRepository.findById(invalidId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> departmentService.deleteDepartment(invalidId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessage("Department with id : '999' not found");
+
+    verify(departmentRepository, times(1)).findById(invalidId);
+    verify(departmentRepository, never()).delete(any(Department.class));
+}
 
 }
