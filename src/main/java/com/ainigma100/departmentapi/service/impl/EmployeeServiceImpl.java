@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 
@@ -37,27 +38,42 @@ public class EmployeeServiceImpl implements EmployeeService {
     private static final String EMPLOYEE_NOT_BELONG_TO_DEPARTMENT = "Employee does not belong to Department";
 
 
-
     @Override
     public EmployeeDTO createEmployee(Long departmentId, EmployeeDTO employeeDTO) {
-
-        Employee employeeRecordFromDB = employeeRepository.findByEmail(employeeDTO.getEmail());
-
-        if (employeeRecordFromDB != null) {
-            throw new ResourceAlreadyExistException(EMPLOYEE, "email", employeeDTO.getEmail());
-        }
-
-        Employee employee = employeeMapper.employeeDtoToEmployee(employeeDTO);
-
-        Department departmentRecordFromDB = departmentRepository.findById(departmentId)
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT, "id", departmentId));
-
-        employee.setDepartment(departmentRecordFromDB);
-
-        Employee savedEmployee = employeeRepository.save(employee);
-
-        return employeeMapper.employeeToEmployeeDto(savedEmployee);
+    // ✅ **Validate input parameters before checking the department**
+    if (departmentId == null) {
+        throw new IllegalArgumentException("Department ID cannot be null");
     }
+    if (employeeDTO == null) {
+        throw new IllegalArgumentException("Employee data must not be null");
+    }
+    if (employeeDTO.getFirstName() == null || employeeDTO.getFirstName().trim().isEmpty()) {
+        throw new IllegalArgumentException("First name is required");
+    }
+    if (employeeDTO.getEmail() == null || !employeeDTO.getEmail().matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
+        throw new IllegalArgumentException("Invalid email format");
+    }
+    if (employeeDTO.getSalary() == null || employeeDTO.getSalary().compareTo(BigDecimal.ZERO) <= 0) {
+        throw new IllegalArgumentException("Salary must be greater than zero");
+    }
+
+    // ✅ **Check if email already exists before department lookup**
+    Employee employeeRecordFromDB = employeeRepository.findByEmail(employeeDTO.getEmail());
+    if (employeeRecordFromDB != null) {
+        throw new ResourceAlreadyExistException("Employee", "email", employeeDTO.getEmail());
+    }
+
+    // ✅ **Now check if department exists**
+    Department departmentRecordFromDB = departmentRepository.findById(departmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Department", "id", departmentId));
+
+    // ✅ **Create and save employee**
+    Employee employee = employeeMapper.employeeDtoToEmployee(employeeDTO);
+    employee.setDepartment(departmentRecordFromDB);
+    Employee savedEmployee = employeeRepository.save(employee);
+
+    return employeeMapper.employeeToEmployeeDto(savedEmployee);
+}
 
     @Override
     public Page<EmployeeDTO> getAllEmployeesUsingPagination(EmployeeSearchCriteriaDTO employeeSearchCriteriaDTO) {
@@ -131,20 +147,26 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public void deleteEmployee(Long departmentId, String employeeId) {
-
-        Department departmentRecordFromDB = departmentRepository.findById(departmentId)
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT, "id", departmentId));
-
-        Employee employeeRecordFromDB = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new ResourceNotFoundException(EMPLOYEE, "id", employeeId));
-
-        if ( !employeeBelongsToDepartment(departmentRecordFromDB, employeeRecordFromDB)) {
-            throw new BusinessLogicException(EMPLOYEE_NOT_BELONG_TO_DEPARTMENT);
-        }
-
-        employeeRepository.delete(employeeRecordFromDB);
-
+    if (departmentId == null) {
+        throw new IllegalArgumentException("Department ID must not be null");
     }
+    if (employeeId == null || employeeId.trim().isEmpty()) {
+        throw new IllegalArgumentException("Employee ID must not be null or empty");
+    }
+
+    Department departmentRecordFromDB = departmentRepository.findById(departmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Department", "id", departmentId));
+
+    Employee employeeRecordFromDB = employeeRepository.findById(employeeId)
+            .orElseThrow(() -> new ResourceNotFoundException("Employee", "id", employeeId));
+
+    if (!employeeBelongsToDepartment(departmentRecordFromDB, employeeRecordFromDB)) {
+        throw new BusinessLogicException("Employee does not belong to Department");
+    }
+
+    employeeRepository.delete(employeeRecordFromDB);
+}
+
 
     @Override
     public EmployeeAndDepartmentDTO getEmployeeAndDepartmentByEmployeeEmail(String email) {
