@@ -588,5 +588,74 @@ class EmployeeServiceImplTest {
         verify(employeeMapper, never()).employeeToEmployeeAndDepartmentDto(any(Employee.class));
     }
 
+/*LLM GENERATED TESTS */
+@Test
+@DisplayName("Given null department ID when creating an employee, then throw IllegalArgumentException")
+void givenNullDepartmentId_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    EmployeeDTO employeeDTO = new EmployeeDTO();
+    employeeDTO.setFirstName("John");
+    employeeDTO.setEmail("john.doe@email.com");
 
+    assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> employeeService.createEmployee(null, employeeDTO))
+            .withMessage("Department ID cannot be null");
+}
+
+
+@Test
+@DisplayName("Given invalid salary when creating an employee, then throw IllegalArgumentException")
+void givenInvalidSalary_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    EmployeeDTO employeeDTO = new EmployeeDTO();
+    employeeDTO.setFirstName("John");
+    employeeDTO.setEmail("john.doe@email.com");
+
+    // Test negative salary
+    employeeDTO.setSalary(BigDecimal.valueOf(-5000));
+    assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> employeeService.createEmployee(1L, employeeDTO))
+            .withMessage("Salary must be greater than zero");
+
+    // Test zero salary
+    employeeDTO.setSalary(BigDecimal.ZERO);
+    assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> employeeService.createEmployee(1L, employeeDTO))
+            .withMessage("Salary must be greater than zero");
+}
+
+
+@Test
+@DisplayName("Given invalid email format when creating an employee, then throw IllegalArgumentException")
+void givenInvalidEmailFormat_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    EmployeeDTO employeeDTO = new EmployeeDTO();
+    employeeDTO.setFirstName("John");
+    employeeDTO.setEmail("invalid-email"); // No @ symbol
+
+    assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> employeeService.createEmployee(1L, employeeDTO))
+            .withMessage("Invalid email format");
+}
+
+
+    @Test
+    @DisplayName("Given department ID and employee ID that do not match, when updating employee, then throw BusinessLogicException")
+    void givenDepartmentIdAndEmployeeIdNotMatching_whenUpdateEmployee_thenThrowBusinessLogicException() {
+        Department department = new Department();
+        department.setId(2L);
+
+        Employee employee = new Employee();
+        employee.setId("emp01");
+        employee.setDepartment(new Department()); // Different department
+
+        given(departmentRepository.findById(2L)).willReturn(Optional.of(department));
+        given(employeeRepository.findById("emp01")).willReturn(Optional.of(employee));
+
+        EmployeeDTO updatedEmployeeDTO = new EmployeeDTO();
+        updatedEmployeeDTO.setFirstName("Updated Name");
+
+        assertThatExceptionOfType(BusinessLogicException.class)
+                .isThrownBy(() -> employeeService.updateEmployeeById(2L, "emp01", updatedEmployeeDTO))
+                .withMessage("Employee does not belong to Department");
+    }
+
+   
 }
