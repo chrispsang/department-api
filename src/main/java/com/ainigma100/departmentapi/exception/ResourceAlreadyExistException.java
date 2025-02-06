@@ -19,5 +19,9 @@ public class ResourceAlreadyExistException extends RuntimeException {
         this.fieldName = fieldName;
         this.fieldValue = fieldValue;
     }
+    // New Constructor (Supports single message)
+    public ResourceAlreadyExistException(String message) {
+        super(message);
+    }
 
 }
