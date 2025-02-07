@@ -91,32 +91,45 @@ class EmailControllerTest {
 
     @Test
     void givenEmailServiceFails_whenSendEmailWithoutAttachment_thenReturnInternalServerError() throws Exception {
-        // given - service failure
         doThrow(new RuntimeException("Email service failed")).when(emailService).sendEmailWithoutAttachment();
-
-        // when - action
-        ResultActions response = mockMvc.perform(get("/api/v1/emails"));
-
-        // then - verify error handling
-        response.andDo(print())
-                .andExpect(status().isInternalServerError());
+    
+        // Perform request & store response
+        MvcResult result = mockMvc.perform(get("/api/v1/emails"))
+               .andDo(print()) // Debugging output
+               .andExpect(status().isInternalServerError()) // Status code check
+               .andReturn();
+    
+        // Print actual response for debugging
+        String jsonResponse = result.getResponse().getContentAsString();
+        System.out.println("Actual Response: " + jsonResponse);
+    
+        // JSON assertions directly on the result
+        mockMvc.perform(get("/api/v1/emails"))
+               .andExpect(jsonPath("$.status").exists())  // Ensures "status" exists
+               .andExpect(jsonPath("$.errors").isArray())  // Ensures "errors" is an array
+               .andExpect(jsonPath("$.errors[0].errorMessage").exists()); // Check for error message
     }
     
     @Test
     void givenRateLimitExceeded_whenSendEmailWithoutAttachment_thenReturnTooManyRequests() throws Exception {
-        // given - exceed rate limit
+        // Simulate exceeding rate limit
         for (int i = 0; i < 100; i++) {
             mockMvc.perform(get("/api/v1/emails"));
         }
-
-        // when - exceeding rate limit
-        ResultActions response = mockMvc.perform(get("/api/v1/emails"));
-
-        // then - verify response
-        response.andDo(print())
-                .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$", is("Rate limit exceeded. Please try again later.")));
+    
+        // Perform request & verify response
+        MvcResult result = mockMvc.perform(get("/api/v1/emails"))
+               .andDo(print())
+               .andExpect(status().isTooManyRequests()) //Ensure 429 Too Many Requests
+               .andReturn();
+    
+        // Extract actual response
+        String jsonResponse = result.getResponse().getContentAsString();
+        System.out.println("Actual Response: " + jsonResponse);
+    
+        assertEquals("Rate limit exceeded. Please try again later.", jsonResponse);
     }
+
 
     @Test
     @DisplayName("Email service failure when sending email with attachment should return Internal Server Error")
