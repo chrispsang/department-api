@@ -28,6 +28,10 @@ import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
@@ -656,6 +660,331 @@ void givenInvalidEmailFormat_whenCreateEmployee_thenThrowIllegalArgumentExceptio
                 .isThrownBy(() -> employeeService.updateEmployeeById(2L, "emp01", updatedEmployeeDTO))
                 .withMessage("Employee does not belong to Department");
     }
+/* manual test improvements */
+@Test
+@DisplayName("Given null EmployeeDTO when creating an employee, then throw IllegalArgumentException")
+void givenNullEmployeeDTO_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // IMPROVEMENT: Previously, null DTOs were not tested
+    assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> employeeService.createEmployee(1L, null))
+            .withMessage("Employee data must not be null");
+}
 
-   
+@Test
+@DisplayName("Given EmployeeDTO with null email when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTONullEmail_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // ✅ IMPROVEMENT: Covers missing validation for null email
+    employeeDTO.setEmail(null);
+    
+    assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> employeeService.createEmployee(1L, employeeDTO))
+            .withMessage("Invalid email format");
+}
+@Test
+@DisplayName("Given null department ID when deleting an employee, then throw IllegalArgumentException")
+void givenNullDepartmentId_whenDeleteEmployee_thenThrowIllegalArgumentException() {
+// IMPROVEMENT: Tests null department ID handling
+assertThatExceptionOfType(IllegalArgumentException.class)
+        .isThrownBy(() -> employeeService.deleteEmployee(null, "emp01"))
+        .withMessage("Department ID must not be null");
+}
+
+@Test
+@DisplayName("Given non-existing employee ID when deleting, then throw ResourceNotFoundException")
+void givenNonExistingEmployeeId_whenDeleteEmployee_thenThrowResourceNotFoundException() {
+// Ensure department exists before checking for employee
+given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+
+// Mock employee repository to return empty result
+given(employeeRepository.findById("invalid-emp")).willReturn(Optional.empty());
+
+assertThatExceptionOfType(ResourceNotFoundException.class)
+        .isThrownBy(() -> employeeService.deleteEmployee(1L, "invalid-emp"))
+        .withMessage("Employee with id : 'invalid-emp' not found");
+}
+
+
+
+@Test
+@DisplayName("Given employee already deleted when deleting an employee, then throw BusinessLogicException")
+void givenEmployeeAlreadyDeleted_whenDeleteEmployee_thenThrowBusinessLogicException() {
+// Ensure department exists
+given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+
+// Simulate deleted employee (removed from department)
+employee.setDepartment(null); 
+
+given(employeeRepository.findById(employee.getId())).willReturn(Optional.of(employee));
+
+assertThatExceptionOfType(BusinessLogicException.class)
+        .isThrownBy(() -> employeeService.deleteEmployee(1L, employee.getId()))
+        .withMessage("Employee does not belong to Department");
+}
+@Test
+@DisplayName("Given valid department ID and employee ID when deleting, then delete successfully")
+void givenValidDepartmentAndEmployee_whenDeleteEmployee_thenDeleteSuccessfully() {
+// Covers successful deletion scenario
+Department department = new Department();
+department.setId(1L);
+
+Employee employee = new Employee();
+employee.setId("EMP001");
+employee.setDepartment(department); // Belongs to same department!
+
+given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+given(employeeRepository.findById("EMP001")).willReturn(Optional.of(employee));
+
+// Act
+employeeService.deleteEmployee(1L, "EMP001");
+
+// Assert
+verify(employeeRepository, times(1)).delete(employee);
+}
+
+
+@Test
+@DisplayName("Given null Employee ID when deleting, then throw IllegalArgumentException")
+void givenNullEmployeeId_whenDeleteEmployee_thenThrowIllegalArgumentException() {
+    // Covers scenario where employee ID is null
+    Exception exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.deleteEmployee(1L, null));
+
+    assertEquals("Employee ID must not be null or empty", exception.getMessage());
+
+    verify(employeeRepository, never()).delete(any(Employee.class));
+}
+
+@Test
+@DisplayName("Given empty Employee ID when deleting, then throw IllegalArgumentException")
+void givenEmptyEmployeeId_whenDeleteEmployee_thenThrowIllegalArgumentException() {
+    // Covers scenario where employee ID is empty
+    Exception exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.deleteEmployee(1L, "  "));
+
+    assertEquals("Employee ID must not be null or empty", exception.getMessage());
+
+    verify(employeeRepository, never()).delete(any(Employee.class));
+}
+
+@Test
+@DisplayName("Given non-existent Department ID when deleting Employee, then throw ResourceNotFoundException")
+void givenNonExistentDepartmentId_whenDeleteEmployee_thenThrowResourceNotFoundException() {
+    // Covers scenario where department does not exist
+    given(departmentRepository.findById(1L)).willReturn(Optional.empty());
+
+    Exception exception = assertThrows(ResourceNotFoundException.class, 
+        () -> employeeService.deleteEmployee(1L, "EMP001"));
+
+    assertEquals("Department with id : '1' not found", exception.getMessage());
+
+    verify(departmentRepository, times(1)).findById(1L);
+    verify(employeeRepository, never()).delete(any(Employee.class));
+}
+
+@Test
+@DisplayName("Given Employee not in Department when deleting, then throw BusinessLogicException")
+void givenEmployeeNotInDepartment_whenDeleteEmployee_thenThrowBusinessLogicException() {
+    // Covers scenario where employee is in a different department
+    Department department = new Department();
+    department.setId(1L);
+
+    Department otherDepartment = new Department();
+    otherDepartment.setId(2L);
+
+    Employee employee = new Employee();
+    employee.setId("EMP001");
+    employee.setDepartment(otherDepartment); // Employee belongs to a different department
+
+    given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+    given(employeeRepository.findById("EMP001")).willReturn(Optional.of(employee));
+
+    Exception exception = assertThrows(BusinessLogicException.class, 
+        () -> employeeService.deleteEmployee(1L, "EMP001"));
+
+    assertEquals("Employee does not belong to Department", exception.getMessage());
+
+    verify(departmentRepository, times(1)).findById(1L);
+    verify(employeeRepository, times(1)).findById("EMP001");
+    verify(employeeRepository, never()).delete(any(Employee.class));
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with null first name when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTONullFirstName_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // Covers missing validation for null first name
+    employeeDTO.setFirstName(null);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("First name is required", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with empty first name when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTOEmptyFirstName_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // Covers missing validation for empty first name
+    employeeDTO.setFirstName("  ");
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("First name is required", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with invalid email format when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTOInvalidEmail_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // Covers invalid email format
+    employeeDTO.setEmail("invalid-email");
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("Invalid email format", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with null salary when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTONullSalary_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // Covers missing salary validation
+    employeeDTO.setSalary(null);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("Salary must be greater than zero", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with zero salary when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTOZeroSalary_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // Covers invalid zero salary case
+    employeeDTO.setSalary(BigDecimal.ZERO);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("Salary must be greater than zero", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with negative salary when creating an employee, then throw IllegalArgumentException")
+void givenEmployeeDTONegativeSalary_whenCreateEmployee_thenThrowIllegalArgumentException() {
+    // Covers invalid negative salary case
+    employeeDTO.setSalary(new BigDecimal("-1000"));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("Salary must be greater than zero", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given EmployeeDTO with duplicate email when creating an employee, then throw ResourceAlreadyExistException")
+void givenDuplicateEmail_whenCreateEmployee_thenThrowResourceAlreadyExistException() {
+    // Covers case when email already exists in DB
+    given(employeeRepository.findByEmail(employeeDTO.getEmail())).willReturn(new Employee());
+
+    ResourceAlreadyExistException exception = assertThrows(ResourceAlreadyExistException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("Resource Employee with email : '" + employeeDTO.getEmail() + "' already exist", exception.getMessage());
+}
+
+
+@Test
+@DisplayName("Given non-existent department ID when creating an employee, then throw ResourceNotFoundException")
+void givenNonExistentDepartmentId_whenCreateEmployee_thenThrowResourceNotFoundException() {
+    // Covers scenario where department does not exist
+    given(departmentRepository.findById(1L)).willReturn(Optional.empty());
+
+    ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, 
+        () -> employeeService.createEmployee(1L, employeeDTO));
+
+    assertEquals("Department with id : '1' not found", exception.getMessage());
+}
+
+@Test
+@DisplayName("Given valid EmployeeDTO when creating an employee, then return created EmployeeDTO")
+void givenValidEmployeeDTO_whenCreateEmployee_thenReturnEmployeeDTO() {
+    // Covers successful employee creation case
+    given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+    given(employeeRepository.findByEmail(employeeDTO.getEmail())).willReturn(null);
+    given(employeeMapper.employeeDtoToEmployee(employeeDTO)).willReturn(employee);
+    given(employeeRepository.save(employee)).willReturn(employee);
+    given(employeeMapper.employeeToEmployeeDto(employee)).willReturn(employeeDTO);
+
+    EmployeeDTO result = employeeService.createEmployee(1L, employeeDTO);
+
+    assertNotNull(result);
+    assertEquals(employeeDTO.getEmail(), result.getEmail());
+    assertEquals(employeeDTO.getFirstName(), result.getFirstName());
+
+    verify(employeeRepository, times(1)).save(employee);
+}
+@Test
+@DisplayName("Given employee in correct department when fetching by ID, then return EmployeeDTO")
+void givenEmployeeInCorrectDepartment_whenGetEmployeeById_thenReturnEmployeeDTO() {
+    // Arrange
+    department.setId(1L);
+    employee.setDepartment(department); // Ensure employee belongs to department
+    given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+    given(employeeRepository.findById("EMP001")).willReturn(Optional.of(employee));
+    given(employeeMapper.employeeToEmployeeDto(employee)).willReturn(employeeDTO);
+
+    // Act
+    EmployeeDTO result = employeeService.getEmployeeById(1L, "EMP001");
+
+    // Assert
+    assertNotNull(result);
+    verify(employeeRepository, times(1)).findById("EMP001");
+}
+@Test
+@DisplayName("Given employee not in department when fetching by ID, then throw BusinessLogicException")
+void givenEmployeeNotInDepartment_whenGetEmployeeById_thenThrowException() {
+    // Arrange
+    department.setId(1L);
+    Department anotherDept = new Department();
+    anotherDept.setId(2L); // Different department
+    employee.setDepartment(anotherDept); // Employee belongs to another dept
+
+    given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+    given(employeeRepository.findById("EMP001")).willReturn(Optional.of(employee));
+
+    // Act & Assert
+    Exception exception = assertThrows(BusinessLogicException.class, 
+() -> employeeService.getEmployeeById(1L, "EMP001"));
+
+assertEquals("Employee does not belong to Department", exception.getMessage());
+
+}
+@Test
+@DisplayName("Given employee with null department when fetching by ID, then throw BusinessLogicException")
+void givenEmployeeWithNullDepartment_whenGetEmployeeById_thenThrowException() {
+    // Arrange
+    employee.setDepartment(null); // Employee has no department
+
+    given(departmentRepository.findById(1L)).willReturn(Optional.of(department));
+    given(employeeRepository.findById("EMP001")).willReturn(Optional.of(employee));
+
+    // Act & Assert
+    Exception exception = assertThrows(BusinessLogicException.class, 
+    () -> employeeService.getEmployeeById(1L, "EMP001"));
+
+assertEquals("Employee does not belong to Department", exception.getMessage());
+
+}
+
+@Test
+@DisplayName("Given null department but employee has a department, then return false")
+void givenNullDepartmentButEmployeeHasDepartment_whenEmployeeBelongsToDepartment_thenReturnFalse() {
+    // Arrange
+    Employee employee = new Employee();
+    employee.setDepartment(new Department()); // Employee has a department
+
+    // Act & Assert
+    assertFalse(employeeService.employeeBelongsToDepartment(null, employee));
+}
+      
 }
