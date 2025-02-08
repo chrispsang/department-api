@@ -181,7 +181,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
 
-    private boolean employeeBelongsToDepartment(Department departmentRecordFromDB, Employee employeeRecordFromDB) {
+    boolean employeeBelongsToDepartment(Department departmentRecordFromDB, Employee employeeRecordFromDB) {
 
         if (departmentRecordFromDB == null || employeeRecordFromDB.getDepartment() == null) {
             return false;
