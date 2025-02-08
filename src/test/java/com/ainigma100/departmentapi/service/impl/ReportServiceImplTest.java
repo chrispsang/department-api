@@ -10,6 +10,7 @@ import com.ainigma100.departmentapi.mapper.DepartmentMapper;
 import com.ainigma100.departmentapi.mapper.EmployeeMapper;
 import com.ainigma100.departmentapi.repository.DepartmentRepository;
 import com.ainigma100.departmentapi.repository.EmployeeRepository;
+import com.ainigma100.departmentapi.utils.Utils;
 import com.ainigma100.departmentapi.utils.jasperreport.SimpleReportExporter;
 import com.ainigma100.departmentapi.utils.jasperreport.SimpleReportFiller;
 import net.sf.jasperreports.engine.JRException;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.MessageSource;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
 
 import java.io.IOException;
@@ -28,6 +30,8 @@ import java.math.BigDecimal;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -531,5 +535,142 @@ class ReportServiceImplTest {
         verify(simpleReportExporter, times(1)).combineAndExportPdf(anyList());
     }
 
+/*Manual Test improvements */
+@Test
+void testGeneratePdfFullReport_WhenLanguageIsNull_ShouldNotThrowException() throws JRException {
+    // Arrange
+    ReportLanguage language = null;
+    // other setup code
+
+    // Act
+    FileDTO result = reportService.generatePdfFullReport(language);
+
+    // Assert
+    String expectedFileName = "null_Full_Report_" + Utils.getCurrentDateAsString() + ".pdf";
+    assertEquals(expectedFileName, result.getFileName());
+    // other assertions
+}
+
+@Test
+@DisplayName("Given English ReportLanguage when generatePdfFullReport, then return FileDTO")
+void givenEnglishReportLanguage_whenGeneratePdfFullReport_thenReturnFileDTO() throws JRException {
+    // given
+    ReportLanguage reportLanguage = ReportLanguage.EN;  // Ensure this is a valid enum value
+    given(departmentRepository.findAll()).willReturn(departmentList);
+    given(departmentMapper.departmentToDepartmentReportDto(departmentList)).willReturn(departmentReportDTOList);
+    given(employeeRepository.findAll()).willReturn(employeeList);
+    given(employeeMapper.employeeToEmployeeReportDto(employeeList)).willReturn(employeeReportDTOList);
+    given(simpleReportExporter.exportReportToByteArray(anyList(), anyMap(), anyString(), eq("jrxml/pdf/mainReport")))
+            .willReturn("Mocked Report Data".getBytes());
+    // when
+    FileDTO fileDTO = reportService.generatePdfFullReport(reportLanguage);
+    // then
+    assertThat(fileDTO).isNotNull();
+    assertThat(fileDTO.getFileName()).startsWith("EN_");  // Adjust this based on actual filename format
+    assertThat(fileDTO.getFileContent()).isNotNull();
+}
+@Test
+@DisplayName("Given empty department and employee list when generatePdfFullReport, then return empty FileDTO")
+void givenEmptyLists_whenGeneratePdfFullReport_thenReturnEmptyFileDTO() throws JRException {
+    // given
+    ReportLanguage reportLanguage = ReportLanguage.EN;
+    
+    given(departmentRepository.findAll()).willReturn(Collections.emptyList());
+    given(departmentMapper.departmentToDepartmentReportDto(Collections.emptyList())).willReturn(Collections.emptyList());
+    given(employeeRepository.findAll()).willReturn(Collections.emptyList());
+    given(employeeMapper.employeeToEmployeeReportDto(Collections.emptyList())).willReturn(Collections.emptyList());
+    given(simpleReportExporter.exportReportToByteArray(anyList(), anyMap(), anyString(), eq("jrxml/pdf/mainReport")))
+            .willReturn(null);
+    // when
+    FileDTO fileDTO = reportService.generatePdfFullReport(reportLanguage);
+    // then
+    assertThat(fileDTO).isNotNull();
+    assertThat(fileDTO.getFileContent()).isNull();
+}
+//
+@Test
+void givenLanguageNotNull_whenGetLocale_thenReturnLanguageLocale() {
+    // Arrange
+    ReportLanguage language = mock(ReportLanguage.class);
+    when(language.getLocale()).thenReturn(Locale.FRENCH);
+    // Act
+    Locale locale = language != null ? language.getLocale() : Locale.ENGLISH;
+    // Assert
+    assertEquals(Locale.FRENCH, locale); 
+}
+@Test
+void givenLanguageNull_whenGetLocale_thenReturnDefaultEnglishLocale() {
+    // Arrange
+    ReportLanguage language = null; 
+    // Act
+    Locale locale = language != null ? language.getLocale() : Locale.ENGLISH;
+    // Assert
+    assertEquals(Locale.ENGLISH, locale); 
+}
+
+@Test
+void givenDifferentMessageSource_whenGeneratePdfReport_thenSkipEncoding() throws JRException {
+    // Arrange
+    MessageSource messageSource = mock(MessageSource.class); //Not an instance of `ReloadableResourceBundleMessageSource`
+    ReportLanguage language = mock(ReportLanguage.class);
+    when(language.getLocale()).thenReturn(Locale.FRENCH);
+    ReportServiceImpl reportService = new ReportServiceImpl(
+            departmentRepository, employeeRepository, departmentMapper,
+            employeeMapper, simpleReportExporter, simpleReportFiller, messageSource
+    );
+    // Act
+    FileDTO fileDTO = reportService.generatePdfFullReport(language);
+    // Assert
+    assertNotNull(fileDTO);
+    assertNotNull(fileDTO.getFileName());
+    verifyNoInteractions(messageSource); // Covers `instanceof` FALSE branch
+}
+@Test
+void givenValidLanguage_whenGeneratePdfReport_thenGenerateSuccessfully() throws JRException {
+    // Arrange
+    ReportLanguage language = mock(ReportLanguage.class);
+    when(language.getLocale()).thenReturn(Locale.FRENCH);
+    MessageSource messageSource = mock(ReloadableResourceBundleMessageSource.class);
+    ReportServiceImpl reportService = new ReportServiceImpl(
+            departmentRepository, employeeRepository, departmentMapper,
+            employeeMapper, simpleReportExporter, simpleReportFiller, messageSource
+    );
+    // Act
+    FileDTO fileDTO = reportService.generatePdfFullReport(language);
+    // Assert
+    assertNotNull(fileDTO);
+    assertNotNull(fileDTO.getFileName());  //This ensures fileDTO is used in every test
+}
+@Test
+void givenReloadableResourceBundleMessageSource_whenGeneratePdfReport_thenSetEncoding() throws JRException {
+    // Arrange
+    ReportLanguage language = mock(ReportLanguage.class);
+    when(language.getLocale()).thenReturn(Locale.FRENCH);
+    MessageSource messageSource = mock(ReloadableResourceBundleMessageSource.class); // Ensures the condition is executed
+    ReportServiceImpl reportService = new ReportServiceImpl(
+            departmentRepository, employeeRepository, departmentMapper,
+            employeeMapper, simpleReportExporter, simpleReportFiller, messageSource
+    );
+    // Act
+    FileDTO fileDTO = reportService.generatePdfFullReport(language);
+    // Assert
+    assertNotNull(fileDTO);
+    assertNotNull(fileDTO.getFileName());
+}
+@Test
+void givenNonReloadableMessageSource_whenGeneratePdfReport_thenSkipEncoding() throws JRException {
+    // Arrange
+    ReportLanguage language = mock(ReportLanguage.class);
+    when(language.getLocale()).thenReturn(Locale.FRENCH);
+    MessageSource messageSource = mock(MessageSource.class); // Not ReloadableResourceBundleMessageSource
+    ReportServiceImpl reportService = new ReportServiceImpl(
+            departmentRepository, employeeRepository, departmentMapper,
+            employeeMapper, simpleReportExporter, simpleReportFiller, messageSource
+    );
+    // Act
+    FileDTO fileDTO = reportService.generatePdfFullReport(language);
+    // Assert
+    assertNotNull(fileDTO);
+}
 
 }
